@@ -24,3 +24,4 @@ export function getCurrentUser() {
   return auth.currentUser;
 }
 
+

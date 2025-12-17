@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getMenuItemsByCategory, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 
 interface UserSidebarConfigModalProps {
@@ -137,7 +137,7 @@ export default function UserSidebarConfigModal({
 
   if (!isOpen) return null;
 
-  const groupedItems = config ? getMenuItemsByCategory(config.availableMenuItems || AVAILABLE_MENU_ITEMS) : {};
+  const groupedItems = config ? getMenuItemsByCategoryOrdered(config.availableMenuItems || AVAILABLE_MENU_ITEMS) : [];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -174,7 +174,7 @@ export default function UserSidebarConfigModal({
                 </p>
               </div>
 
-              {Object.entries(groupedItems).map(([category, items]) => (
+              {groupedItems.map(([category, items]) => (
                 <div key={category} className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-900">
@@ -245,4 +245,5 @@ export default function UserSidebarConfigModal({
     </div>
   );
 }
+
 

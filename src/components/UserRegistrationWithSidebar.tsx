@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { getAuthToken } from '@/lib/auth';
-import { getMenuItemsByCategory, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
 
 export default function UserRegistrationWithSidebarComponent() {
   const [formData, setFormData] = useState({
@@ -149,7 +149,7 @@ export default function UserRegistrationWithSidebarComponent() {
     }
   };
 
-  const groupedItems = config ? getMenuItemsByCategory(config.availableMenuItems || AVAILABLE_MENU_ITEMS) : {};
+  const groupedItems = config ? getMenuItemsByCategoryOrdered(config.availableMenuItems || AVAILABLE_MENU_ITEMS) : [];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -273,7 +273,7 @@ export default function UserRegistrationWithSidebarComponent() {
             <div className="text-center text-gray-500 text-sm py-8">読み込み中...</div>
           ) : (
             <div className="space-y-4">
-              {Object.entries(groupedItems).map(([category, items]) => (
+              {groupedItems.map(([category, items]) => (
                 <div key={category} className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-900">
@@ -337,4 +337,5 @@ export default function UserRegistrationWithSidebarComponent() {
     </form>
   );
 }
+
 

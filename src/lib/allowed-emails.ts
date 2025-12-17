@@ -31,3 +31,4 @@ export function isEmailAllowed(email: string | null | undefined): boolean {
   return allowedEmails.includes(email.toLowerCase());
 }
 
+

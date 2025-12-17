@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getMenuItemsByCategory, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 
 export default function SidebarConfigComponent() {
@@ -108,7 +108,7 @@ export default function SidebarConfigComponent() {
     );
   }
 
-  const groupedItems = getMenuItemsByCategory(config.availableMenuItems);
+  const groupedItems = getMenuItemsByCategoryOrdered(config.availableMenuItems);
 
   return (
     <div className="space-y-4">
@@ -131,7 +131,7 @@ export default function SidebarConfigComponent() {
       )}
 
       <div className="space-y-4">
-        {Object.entries(groupedItems).map(([category, items]) => (
+        {groupedItems.map(([category, items]) => (
           <div key={category} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-900">

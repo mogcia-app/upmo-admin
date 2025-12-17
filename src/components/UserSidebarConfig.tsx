@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getMenuItemsByCategory, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 import Link from 'next/link';
 
@@ -146,7 +146,7 @@ export default function UserSidebarConfigComponent() {
     );
   }
 
-  const groupedItems = getMenuItemsByCategory(config.availableMenuItems);
+  const groupedItems = getMenuItemsByCategoryOrdered(config.availableMenuItems);
 
   return (
     <div className="p-8">
@@ -182,7 +182,7 @@ export default function UserSidebarConfigComponent() {
         )}
 
         <div className="space-y-6">
-          {Object.entries(groupedItems).map(([category, items]) => (
+          {groupedItems.map(([category, items]) => (
             <div key={category} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -240,4 +240,5 @@ export default function UserSidebarConfigComponent() {
     </div>
   );
 }
+
 
