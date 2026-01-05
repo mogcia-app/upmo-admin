@@ -23,7 +23,19 @@ export default function UserRegistrationWithSidebarComponent() {
     const fetchConfig = async () => {
       try {
         setConfigLoading(true);
-        const response = await fetch('/api/admin/sidebar-config');
+        
+        // 認証トークンを取得（オプション）
+        const token = await getAuthToken();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch('/api/admin/sidebar-config', {
+          headers,
+        });
         if (!response.ok) {
           throw new Error(`Failed to fetch config: ${response.statusText}`);
         }

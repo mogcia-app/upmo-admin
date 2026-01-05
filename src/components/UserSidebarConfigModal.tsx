@@ -50,7 +50,11 @@ export default function UserSidebarConfigModal({
 
       if (!response.ok) {
         // 個別設定がない場合は共通設定を取得
-        const commonResponse = await fetch('/api/admin/sidebar-config');
+        const commonResponse = await fetch('/api/admin/sidebar-config', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
         if (!commonResponse.ok) {
           throw new Error(`Failed to fetch config: ${commonResponse.statusText}`);
         }

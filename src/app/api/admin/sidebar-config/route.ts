@@ -8,12 +8,20 @@ const UPMO_DEMO_API_BASE = process.env.NEXT_PUBLIC_UPMO_DEMO_API_BASE || 'https:
  */
 export async function GET(request: NextRequest) {
   try {
+    // 認証トークンをリクエストヘッダーから取得（オプション）
+    const authHeader = request.headers.get('authorization');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      headers['Authorization'] = authHeader;
+    }
+
     // upmo-demo側のAPIを直接呼び出す
     const response = await fetch(`${UPMO_DEMO_API_BASE}/api/admin/sidebar-config`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
 
     if (!response.ok) {

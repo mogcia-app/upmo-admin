@@ -10,6 +10,7 @@ export interface MenuItem {
 }
 
 export interface SidebarConfig {
+  companyName?: string;
   commonMenuItems: MenuItem[];
   adminMenuItems: MenuItem[];
   availableMenuItems?: MenuItem[];
@@ -126,6 +127,14 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     description: '顧客情報・取引履歴の管理',
     category: 'customer',
   },
+  {
+    id: 'customer-list',
+    name: 'リスト',
+    icon: '📋',
+    href: '/customers/list',
+    description: '顧客リストの管理',
+    category: 'customer',
+  },
   // PDCA管理
   {
     id: 'pdca-plan',
@@ -177,6 +186,14 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     category: 'document',
   },
   {
+    id: 'meeting-notes',
+    name: '議事録管理',
+    icon: '📝',
+    href: '/meeting-notes',
+    description: '議事録管理',
+    category: 'other',
+  },
+  {
     id: 'document-management',
     name: 'ドキュメント管理',
     icon: '📚',
@@ -185,30 +202,6 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     category: 'document',
   },
   // その他
-  {
-    id: 'calendar',
-    name: 'カレンダー',
-    icon: '📅',
-    href: '/calendar',
-    description: 'スケジュール管理',
-    category: 'other',
-  },
-  {
-    id: 'reports',
-    name: 'レポート',
-    icon: '📊',
-    href: '/reports',
-    description: '各種レポートの表示',
-    category: 'other',
-  },
-  {
-    id: 'analytics',
-    name: '分析ダッシュボード',
-    icon: '📈',
-    href: '/analytics',
-    description: 'データ分析と可視化',
-    category: 'other',
-  },
 ];
 
 // カテゴリごとにグループ化する関数
