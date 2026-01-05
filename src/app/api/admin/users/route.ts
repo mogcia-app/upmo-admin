@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
+import { validateUserData } from '@/types/user';
 
 /**
  * GET: 利用者一覧を取得
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // リクエストボディを取得
     const body = await request.json();
-    const { email, password, displayName, companyName, subscriptionType } = body;
+    const { email, password, displayName, companyName, subscriptionType, department, position } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -105,17 +106,34 @@ export async function POST(request: NextRequest) {
       displayName: displayName || undefined,
     });
 
-    // 2. Firestoreにユーザー情報を保存（親ユーザーとして固定）
-    const userDocRef = adminDb.collection('users').doc(userRecord.uid);
-    await userDocRef.set({
+    // 2. Firestoreにユーザー情報を保存（統一スキーマに準拠）
+    const userData = {
       email,
-      displayName: displayName || null,
-      companyName: companyName || null,
-      subscriptionType: subscriptionType || 'trial',
-      role: 'user', // 親ユーザーは固定でuser
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+      displayName: displayName || email.split('@')[0],
+      companyName: companyName || '',
+      role: 'user' as const, // 親ユーザーは固定でuser
+      status: 'active' as const, // ✅ 追加（必須）
+      department: department || '', // ✅ 追加（オプション、デフォルト: ''）
+      position: position || '', // ✅ 追加（オプション、デフォルト: ''）
+      createdAt: Timestamp.now(), // ✅ FieldValue.serverTimestamp()から変更
+      createdBy: null, // ✅ 追加（admin側から作成した場合はnull）
+      updatedAt: Timestamp.now(), // ✅ FieldValue.serverTimestamp()から変更
+      subscriptionType: subscriptionType || null,
+    };
+
+    // バリデーション（オプション）
+    const validation = validateUserData(userData);
+    if (!validation.valid) {
+      // バリデーションエラーの場合、Firebase Authのユーザーを削除
+      await adminAuth.deleteUser(userRecord.uid);
+      return NextResponse.json(
+        { success: false, error: `バリデーションエラー: ${validation.errors.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    const userDocRef = adminDb.collection('users').doc(userRecord.uid);
+    await userDocRef.set(userData);
 
     return NextResponse.json({
       success: true,
