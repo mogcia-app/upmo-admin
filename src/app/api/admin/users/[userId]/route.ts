@@ -154,3 +154,74 @@ export async function GET(
   }
 }
 
+/**
+ * DELETE: ユーザーを削除
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    // 認証トークンをリクエストヘッダーから取得
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { success: false, error: 'Authorization token is required' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+
+    // Firebase認証トークンを検証
+    try {
+      await adminAuth.verifyIdToken(token);
+    } catch (authError) {
+      console.error('Auth verification error:', authError);
+      return NextResponse.json(
+        { success: false, error: 'Invalid or expired token' },
+        { status: 401 }
+      );
+    }
+
+    // パラメータを取得
+    const { userId } = await params;
+
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // ユーザードキュメントが存在するか確認
+    const userDocRef = adminDb.collection('users').doc(userId);
+    const userDoc = await userDocRef.get();
+
+    if (!userDoc.exists) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Firebase Authからユーザーを削除
+    await adminAuth.deleteUser(userId);
+
+    // Firestoreからユーザードキュメントを削除
+    await userDocRef.delete();
+
+    return NextResponse.json({
+      success: true,
+      message: 'User deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to delete user' },
+      { status: 500 }
+    );
+  }
+}
+
+

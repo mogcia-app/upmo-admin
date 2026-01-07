@@ -36,11 +36,11 @@ export default function SidebarConfigComponent() {
       }
       
       const data = await response.json();
-      const availableMenuItems = data.availableMenuItems || AVAILABLE_MENU_ITEMS;
-      
+      // 常に最新のAVAILABLE_MENU_ITEMSを使用（APIから取得した古いデータを無視）
+      // enabledMenuItemsのみAPIから取得したデータを使用
       setConfig({
         ...data,
-        availableMenuItems,
+        availableMenuItems: AVAILABLE_MENU_ITEMS, // 常に最新のメニュー項目を使用
       });
     } catch (err) {
       console.error('Error fetching config:', err);

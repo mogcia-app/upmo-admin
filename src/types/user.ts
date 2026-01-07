@@ -84,6 +84,11 @@ export function validateUserData(data: Partial<User>): ValidationResult {
     errors.push('createdAtはTimestampである必要があります');
   }
 
+  // updatedAtのチェック（推奨フィールドだが、統一スキーマに準拠するためチェック）
+  if (data.updatedAt !== undefined && !(data.updatedAt instanceof Timestamp)) {
+    errors.push('updatedAtはTimestampである必要があります');
+  }
+
   // オプションフィールドの型チェック
   if (data.department !== undefined && typeof data.department !== 'string') {
     errors.push('departmentは文字列である必要があります');
@@ -143,4 +148,5 @@ export function normalizeUserData(data: any): Partial<User> {
 
   return normalized;
 }
+
 

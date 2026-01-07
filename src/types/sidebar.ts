@@ -23,76 +23,18 @@ export interface SidebarConfig {
 export const CATEGORY_NAMES: Record<string, string> = {
   sales: '営業管理',
   customer: '顧客管理',
-  inventory: '在庫・発注管理',
-  finance: '財務管理',
-  pdca: 'PDCA管理',
   document: 'ドキュメント管理',
-  other: 'その他',
 };
 
 // カテゴリの表示順序
 export const CATEGORY_ORDER: string[] = [
-  'inventory',
-  'finance',
   'sales',
   'customer',
-  'pdca',
   'document',
-  'other',
 ];
 
 // 利用可能なメニュー項目の候補プール
 export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
-  // 在庫・発注管理
-  {
-    id: 'inventory-management',
-    name: '在庫管理',
-    icon: '📦',
-    href: '/inventory',
-    description: '在庫情報の管理',
-    category: 'inventory',
-  },
-  {
-    id: 'purchase-management',
-    name: '発注管理',
-    icon: '🛒',
-    href: '/purchases',
-    description: '発注情報の管理',
-    category: 'inventory',
-  },
-  {
-    id: 'sales-orders',
-    name: '受注管理',
-    icon: '📋',
-    href: '/sales/orders',
-    description: '受注情報の管理',
-    category: 'inventory',
-  },
-  // 財務管理
-  {
-    id: 'billing-management',
-    name: '請求管理',
-    icon: '💳',
-    href: '/billing',
-    description: '請求書の作成・管理',
-    category: 'finance',
-  },
-  {
-    id: 'expense-management',
-    name: '経費管理',
-    icon: '📊',
-    href: '/expenses',
-    description: '経費の記録・管理',
-    category: 'finance',
-  },
-  {
-    id: 'sales-quotes',
-    name: '見積管理',
-    icon: '💰',
-    href: '/sales/quotes',
-    description: '見積書の作成・管理',
-    category: 'finance',
-  },
   // 営業管理
   {
     id: 'sales-opportunity',
@@ -135,39 +77,6 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     description: '顧客リストの管理',
     category: 'customer',
   },
-  // PDCA管理
-  {
-    id: 'pdca-plan',
-    name: '計画管理',
-    icon: '📝',
-    href: '/pdca/plan',
-    description: 'PDCAの計画フェーズ',
-    category: 'pdca',
-  },
-  {
-    id: 'pdca-do',
-    name: '実行管理',
-    icon: '⚡',
-    href: '/pdca/do',
-    description: 'PDCAの実行フェーズ',
-    category: 'pdca',
-  },
-  {
-    id: 'pdca-check',
-    name: '評価管理',
-    icon: '📈',
-    href: '/pdca/check',
-    description: 'PDCAの評価フェーズ',
-    category: 'pdca',
-  },
-  {
-    id: 'pdca-action',
-    name: '改善管理',
-    icon: '🔧',
-    href: '/pdca/action',
-    description: 'PDCAの改善フェーズ',
-    category: 'pdca',
-  },
   // ドキュメント管理
   {
     id: 'template-management',
@@ -186,14 +95,6 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     category: 'document',
   },
   {
-    id: 'meeting-notes',
-    name: '議事録管理',
-    icon: '📝',
-    href: '/meeting-notes',
-    description: '議事録管理',
-    category: 'other',
-  },
-  {
     id: 'document-management',
     name: 'ドキュメント管理',
     icon: '📚',
@@ -201,7 +102,6 @@ export const AVAILABLE_MENU_ITEMS: MenuItem[] = [
     description: '各種ドキュメントの管理',
     category: 'document',
   },
-  // その他
 ];
 
 // カテゴリごとにグループ化する関数

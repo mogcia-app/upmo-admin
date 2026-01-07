@@ -59,17 +59,17 @@ export default function UserSidebarConfigModal({
           throw new Error(`Failed to fetch config: ${commonResponse.statusText}`);
         }
         const commonData = await commonResponse.json();
-        const availableMenuItems = commonData.availableMenuItems || AVAILABLE_MENU_ITEMS;
+        // 常に最新のAVAILABLE_MENU_ITEMSを使用（APIから取得した古いデータを無視）
         setConfig({
           ...commonData,
-          availableMenuItems,
+          availableMenuItems: AVAILABLE_MENU_ITEMS, // 常に最新のメニュー項目を使用
         });
       } else {
         const data = await response.json();
-        const availableMenuItems = data.availableMenuItems || AVAILABLE_MENU_ITEMS;
+        // 常に最新のAVAILABLE_MENU_ITEMSを使用（APIから取得した古いデータを無視）
         setConfig({
           ...data,
-          availableMenuItems,
+          availableMenuItems: AVAILABLE_MENU_ITEMS, // 常に最新のメニュー項目を使用
         });
       }
     } catch (err) {
