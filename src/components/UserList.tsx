@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { getAuthToken } from '@/lib/auth';
-import UserSidebarConfigModal from './UserSidebarConfigModal';
 import UserEditModal from './UserEditModal';
 
 interface User {
@@ -18,18 +17,10 @@ interface User {
   createdAt?: any;
 }
 
-interface SidebarConfig {
-  enabledMenuItems?: string[];
-}
-
-interface UserWithSidebar extends User {
-  sidebarConfig?: SidebarConfig;
-}
-
 // 会社単位でグループ化されたユーザー
 interface CompanyGroup {
   companyName: string;
-  users: UserWithSidebar[];
+  users: User[];
   subscriptionType?: 'trial' | 'contract';
 }
 
@@ -37,8 +28,6 @@ export default function UserListComponent() {
   const [companyGroups, setCompanyGroups] = useState<CompanyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -74,28 +63,10 @@ export default function UserListComponent() {
         throw new Error(usersResult.error || '利用者一覧の取得に失敗しました');
       }
 
-      // 2. サイドバー設定を取得（共通設定として）
-      let sidebarConfig: SidebarConfig | null = null;
-      try {
-        const sidebarResponse = await fetch('/api/admin/sidebar-config');
-        if (sidebarResponse.ok) {
-          const sidebarData = await sidebarResponse.json();
-          sidebarConfig = {
-            enabledMenuItems: sidebarData.enabledMenuItems || [],
-          };
-        }
-      } catch (err) {
-        console.error('Error fetching sidebar config:', err);
-      }
-
-      // 3. 会社単位でユーザーをグループ化
-      const allUsers: UserWithSidebar[] = (usersResult.users || []).map((user: User) => ({
-        ...user,
-        sidebarConfig: sidebarConfig || undefined,
-      }));
+      const allUsers: User[] = usersResult.users || [];
 
       // 会社名でグループ化
-      const companyMap = new Map<string, UserWithSidebar[]>();
+      const companyMap = new Map<string, User[]>();
       allUsers.forEach((user) => {
         const companyName = user.companyName || '（会社名未設定）';
         if (!companyMap.has(companyName)) {
@@ -136,20 +107,6 @@ export default function UserListComponent() {
       default:
         return '-';
     }
-  };
-
-  const getSidebarEnabledCount = (sidebarConfig?: SidebarConfig) => {
-    return sidebarConfig?.enabledMenuItems?.length || 0;
-  };
-
-  const handleEditSidebar = (userId: string, companyName: string) => {
-    setSelectedUserId(userId);
-    setSelectedCompanyName(companyName);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedUserId(null);
-    setSelectedCompanyName('');
   };
 
   const handleSaveSuccess = () => {
@@ -212,15 +169,15 @@ export default function UserListComponent() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8">
-        <div className="text-center text-gray-500 text-sm">読み込み中...</div>
+      <div className="border border-slate-200 bg-white p-8">
+        <div className="text-center text-sm text-slate-500">読み込み中...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="border border-red-200 bg-red-50 p-4">
         <div className="text-sm text-red-800">{error}</div>
       </div>
     );
@@ -228,8 +185,8 @@ export default function UserListComponent() {
 
   if (companyGroups.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8">
-        <div className="text-center text-gray-500 text-sm">
+      <div className="border border-slate-200 bg-white p-8">
+        <div className="text-center text-sm text-slate-500">
           利用者が登録されていません
         </div>
       </div>
@@ -251,10 +208,10 @@ export default function UserListComponent() {
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-6 flex justify-end">
         <button
           onClick={handleAddUser}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
         >
           + ユーザー追加
         </button>
@@ -262,91 +219,76 @@ export default function UserListComponent() {
 
       <div className="space-y-6">
         {companyGroups.map((group) => (
-          <div key={group.companyName} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div key={group.companyName} className="overflow-hidden border border-slate-200 bg-white">
             {/* 会社ヘッダー */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-xl font-semibold text-slate-900">
                     {group.companyName}
                   </h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="mt-1 text-sm text-slate-600">
                     {group.users.length}名のユーザー
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600">期間</div>
-                    <div className="text-sm font-medium text-gray-900 mt-1">
+                  <div className="min-w-40 border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500">期間</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
                       {getSubscriptionTypeLabel(group.subscriptionType)}
                     </div>
                   </div>
-                  {group.users.length > 0 && (
-                    <button
-                      onClick={() => handleEditSidebar(group.users[0].uid, group.companyName)}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      サイドバー設定
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-4">
-              {/* サイドバー情報 */}
-              {group.users.length > 0 && group.users[0].sidebarConfig && (
-                <div className="mb-4">
-                  <div className="text-sm font-medium text-gray-700 mb-2">サイドバー設定</div>
-                  <div className="text-sm text-gray-600">
-                    有効なメニュー項目: {getSidebarEnabledCount(group.users[0].sidebarConfig)}件
-                  </div>
-                </div>
-              )}
-
+            <div className="px-6 py-5">
               {/* ユーザー一覧 */}
               <div>
-                <div className="text-sm font-medium text-gray-700 mb-3">ユーザー一覧 ({group.users.length}名)</div>
-                <div className="space-y-2">
+                <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="text-sm font-medium text-slate-700">ユーザー一覧</div>
+                  <div className="text-sm text-slate-500">{group.users.length}名</div>
+                </div>
+                <div className="space-y-3">
                   {group.users.map((user) => (
-                    <div key={user.uid} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                    <div key={user.uid} className="flex flex-col gap-4 border border-slate-200 bg-slate-50/70 p-4 md:flex-row md:items-center md:justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-medium text-gray-900">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium text-slate-900">
                             {user.displayName || '（表示名未設定）'}
                           </div>
-                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                          <span className="border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-800">
                             {getRoleLabel(user.role)}
                           </span>
                           {user.status && (
-                            <span className={`text-xs px-2 py-0.5 rounded ${
+                            <span className={`border px-2 py-0.5 text-xs ${
                               user.status === 'active' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-gray-100 text-gray-800'
+                                ? 'border-green-200 bg-green-50 text-green-800' 
+                                : 'border-slate-200 bg-slate-100 text-slate-700'
                             }`}>
                               {user.status === 'active' ? 'アクティブ' : user.status}
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">{user.email}</div>
+                        <div className="mt-1 text-xs text-slate-500">{user.email}</div>
                         {(user.department || user.position) && (
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="mt-1 text-xs text-slate-500">
                             {user.department && <span>{user.department}</span>}
                             {user.department && user.position && <span> / </span>}
                             {user.position && <span>{user.position}</span>}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end md:self-auto">
                         <button
                           onClick={() => handleEditUser(user)}
-                          className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
                         >
                           編集
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user)}
-                          className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100"
                         >
                           削除
                         </button>
@@ -359,17 +301,6 @@ export default function UserListComponent() {
           </div>
         ))}
       </div>
-
-      {/* サイドバー設定モーダル */}
-      {selectedUserId && (
-        <UserSidebarConfigModal
-          userId={selectedUserId}
-          companyName={selectedCompanyName}
-          isOpen={!!selectedUserId}
-          onClose={handleCloseModal}
-          onSave={handleSaveSuccess}
-        />
-      )}
 
       {/* ユーザー編集モーダル */}
       {isEditModalOpen && (

@@ -7,7 +7,10 @@ export function getAllowedEmails(): string[] {
   
   if (envEmails) {
     // カンマ区切りの文字列を配列に変換
-    return envEmails.split(',').map(email => email.trim()).filter(Boolean);
+    return envEmails
+      .split(',')
+      .map(email => email.trim().toLowerCase())
+      .filter(Boolean);
   }
   
   // デフォルト値（環境変数が設定されていない場合）

@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { isEmailAllowed } from '@/lib/allowed-emails';
 
 export default function LoginComponent() {
   const [email, setEmail] = useState('');
@@ -18,7 +19,14 @@ export default function LoginComponent() {
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (!isEmailAllowed(normalizedEmail)) {
+        setError('このメールアドレスはログインを許可されていません');
+        return;
+      }
+
+      await signInWithEmailAndPassword(auth, normalizedEmail, password);
       router.push('/admin/users');
     } catch (err: any) {
       console.error('Login error:', err);
