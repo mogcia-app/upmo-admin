@@ -3,6 +3,16 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { validateUserData } from '@/types/user';
 
+interface CompanyRecord {
+  id: string;
+  name: string;
+  ownerUid?: string;
+  seatLimit?: number;
+  seatsUsed?: number;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 /**
  * ランダムな仮パスワードを生成
  */
@@ -15,43 +25,125 @@ function generateRandomPassword(length: number = 12): string {
   return password;
 }
 
+async function verifyAuthToken(request: NextRequest): Promise<{ token: string } | NextResponse> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json(
+      { success: false, error: 'Authorization token is required' },
+      { status: 401 }
+    );
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+
+  try {
+    await adminAuth.verifyIdToken(token);
+    return { token };
+  } catch (authError) {
+    console.error('Auth verification error:', authError);
+    return NextResponse.json(
+      { success: false, error: 'Invalid or expired token' },
+      { status: 401 }
+    );
+  }
+}
+
+async function findCompany(companyId?: string | null, companyName?: string | null): Promise<CompanyRecord | null> {
+  if (companyId) {
+    const companyDoc = await adminDb.collection('companies').doc(companyId).get();
+    if (companyDoc.exists) {
+      return {
+        id: companyDoc.id,
+        ...(companyDoc.data() as Omit<CompanyRecord, 'id'>),
+      };
+    }
+  }
+
+  if (companyName) {
+    const snapshot = await adminDb
+      .collection('companies')
+      .where('name', '==', companyName)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const companyDoc = snapshot.docs[0];
+      return {
+        id: companyDoc.id,
+        ...(companyDoc.data() as Omit<CompanyRecord, 'id'>),
+      };
+    }
+  }
+
+  return null;
+}
+
+async function createUserDocumentWithSeatReservation(params: {
+  uid: string;
+  userData: Record<string, unknown>;
+  company: CompanyRecord | null;
+}) {
+  const { uid, userData, company } = params;
+  const userDocRef = adminDb.collection('users').doc(uid);
+
+  if (!company) {
+    await userDocRef.set(userData);
+    return;
+  }
+
+  await adminDb.runTransaction(async (transaction) => {
+    const companyRef = adminDb.collection('companies').doc(company.id);
+    const companyDoc = await transaction.get(companyRef);
+
+    if (!companyDoc.exists) {
+      throw new Error('対象の企業情報が見つかりません');
+    }
+
+    const latestCompany = companyDoc.data() as CompanyRecord;
+    const seatLimit = typeof latestCompany.seatLimit === 'number' ? latestCompany.seatLimit : null;
+    const seatsUsed = typeof latestCompany.seatsUsed === 'number' ? latestCompany.seatsUsed : 0;
+
+    if (seatLimit !== null && seatsUsed >= seatLimit) {
+      throw new Error('この企業は利用可能な席数の上限に達しています');
+    }
+
+    transaction.set(userDocRef, userData);
+    transaction.update(companyRef, {
+      seatsUsed: seatsUsed + 1,
+      updatedAt: Timestamp.now(),
+    });
+  });
+}
+
 /**
  * GET: 利用者一覧を取得
  */
 export async function GET(request: NextRequest) {
   try {
-    // 認証トークンをリクエストヘッダーから取得
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Authorization token is required' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-
-    // Firebase認証トークンを検証
-    try {
-      await adminAuth.verifyIdToken(token);
-    } catch (authError) {
-      console.error('Auth verification error:', authError);
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired token' },
-        { status: 401 }
-      );
+    const authResult = await verifyAuthToken(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
     // Firestoreからユーザー一覧を取得
-    const usersSnapshot = await adminDb.collection('users').get();
+    const [usersSnapshot, companiesSnapshot] = await Promise.all([
+      adminDb.collection('users').get(),
+      adminDb.collection('companies').get(),
+    ]);
+
     const users = usersSnapshot.docs.map((doc) => ({
       uid: doc.id,
+      ...doc.data(),
+    }));
+    const companies = companiesSnapshot.docs.map((doc) => ({
+      id: doc.id,
       ...doc.data(),
     }));
 
     return NextResponse.json({
       success: true,
       users,
+      companies,
     });
   } catch (error: any) {
     console.error('Error fetching users:', error);
@@ -72,26 +164,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // 認証トークンをリクエストヘッダーから取得
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Authorization token is required' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-
-    // Firebase認証トークンを検証
-    try {
-      await adminAuth.verifyIdToken(token);
-    } catch (authError) {
-      console.error('Auth verification error:', authError);
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired token' },
-        { status: 401 }
-      );
+    const authResult = await verifyAuthToken(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
     // リクエストボディを取得
@@ -100,10 +175,10 @@ export async function POST(request: NextRequest) {
     // 一括登録かどうかを判定
     if (body.users && Array.isArray(body.users)) {
       // 一括登録処理
-      return await handleBulkUserCreation(body, token);
+      return await handleBulkUserCreation(body);
     } else {
       // 単一ユーザー登録処理（後方互換性のため維持）
-      return await handleSingleUserCreation(body, token);
+      return await handleSingleUserCreation(body);
     }
   } catch (error: any) {
     console.error('Error creating user:', error);
@@ -127,13 +202,13 @@ export async function POST(request: NextRequest) {
 /**
  * 単一ユーザー登録処理
  */
-async function handleSingleUserCreation(body: any, token: string) {
+async function handleSingleUserCreation(body: any) {
   const { 
     email, 
     password, 
     displayName, 
     companyName, 
-    role,
+    companyId,
     subscriptionType, 
     department, 
     position,
@@ -169,12 +244,16 @@ async function handleSingleUserCreation(body: any, token: string) {
     displayName: displayName || undefined,
   });
 
+  const company = await findCompany(companyId, companyName);
+  const normalizedCompanyName = company?.name || companyName || '';
+
   // 2. Firestoreにユーザー情報を保存（統一スキーマに準拠）
   const userData = {
     email,
     displayName: displayName || email.split('@')[0],
-    companyName: companyName || '',
-    role: (role || 'user') as 'admin' | 'manager' | 'user',
+    companyId: company?.id || companyId || null,
+    companyName: normalizedCompanyName,
+    role: 'user' as const,
     status: 'active' as const,
     department: department || '',
     position: position || '',
@@ -194,8 +273,16 @@ async function handleSingleUserCreation(body: any, token: string) {
     );
   }
 
-  const userDocRef = adminDb.collection('users').doc(userRecord.uid);
-  await userDocRef.set(userData);
+  try {
+    await createUserDocumentWithSeatReservation({
+      uid: userRecord.uid,
+      userData,
+      company,
+    });
+  } catch (error) {
+    await adminAuth.deleteUser(userRecord.uid);
+    throw error;
+  }
 
   return NextResponse.json({
     success: true,
@@ -208,8 +295,8 @@ async function handleSingleUserCreation(body: any, token: string) {
 /**
  * 一括ユーザー登録処理
  */
-async function handleBulkUserCreation(body: any, token: string) {
-  const { companyName, users, subscriptionType } = body;
+async function handleBulkUserCreation(body: any) {
+  const { companyName, companyId, users, subscriptionType } = body;
 
   if (!companyName || !users || !Array.isArray(users) || users.length === 0) {
     return NextResponse.json(
@@ -220,6 +307,8 @@ async function handleBulkUserCreation(body: any, token: string) {
 
   const results: Array<{ email: string; uid: string; password: string; success: boolean }> = [];
   const errors: Array<{ email: string; error: string }> = [];
+  const company = await findCompany(companyId, companyName);
+  const normalizedCompanyName = company?.name || companyName;
 
   for (const userInput of users) {
     const { email, displayName } = userInput;
@@ -245,7 +334,8 @@ async function handleBulkUserCreation(body: any, token: string) {
       const userData = {
         email,
         displayName: displayName || email.split('@')[0],
-        companyName: companyName,
+        companyId: company?.id || companyId || null,
+        companyName: normalizedCompanyName,
         role: 'user' as const, // デフォルトでuser
         status: 'active' as const,
         department: '',
@@ -267,8 +357,16 @@ async function handleBulkUserCreation(body: any, token: string) {
         continue;
       }
 
-      const userDocRef = adminDb.collection('users').doc(userRecord.uid);
-      await userDocRef.set(userData);
+      try {
+        await createUserDocumentWithSeatReservation({
+          uid: userRecord.uid,
+          userData,
+          company,
+        });
+      } catch (reservationError) {
+        await adminAuth.deleteUser(userRecord.uid);
+        throw reservationError;
+      }
 
       results.push({
         email,

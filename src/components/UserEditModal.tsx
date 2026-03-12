@@ -6,19 +6,28 @@ import { getAuthToken } from '@/lib/auth';
 interface User {
   uid: string;
   email: string;
+  companyId?: string | null;
   displayName?: string;
   companyName?: string;
-  role: string;
   status?: string;
   department?: string;
   position?: string;
   subscriptionType?: 'trial' | 'contract';
 }
 
+interface PresetCompany {
+  companyId?: string | null;
+  companyName: string;
+  subscriptionType?: 'trial' | 'contract';
+  seatLimit?: number;
+  seatsUsed?: number;
+}
+
 interface UserEditModalProps {
   user: User | null;
   isOpen: boolean;
   isEdit: boolean; // true: 編集, false: 新規追加
+  presetCompany?: PresetCompany | null;
   onClose: () => void;
   onSave: () => void;
 }
@@ -27,14 +36,15 @@ export default function UserEditModal({
   user,
   isOpen,
   isEdit,
+  presetCompany,
   onClose,
   onSave,
 }: UserEditModalProps) {
   const [formData, setFormData] = useState({
     email: '',
     displayName: '',
+    companyId: null as string | null,
     companyName: '',
-    role: 'user' as 'admin' | 'manager' | 'user',
     status: 'active' as 'active' | 'inactive' | 'suspended',
     department: '',
     position: '',
@@ -52,8 +62,8 @@ export default function UserEditModal({
       setFormData({
         email: user.email || '',
         displayName: user.displayName || '',
+        companyId: user.companyId || null,
         companyName: user.companyName || '',
-        role: (user.role as 'admin' | 'manager' | 'user') || 'user',
         status: (user.status as 'active' | 'inactive' | 'suspended') || 'active',
         department: user.department || '',
         position: user.position || '',
@@ -67,19 +77,19 @@ export default function UserEditModal({
       setFormData({
         email: '',
         displayName: '',
-        companyName: '',
-        role: 'user',
+        companyId: presetCompany?.companyId || null,
+        companyName: presetCompany?.companyName || '',
         status: 'active',
         department: '',
         position: '',
-        subscriptionType: 'trial',
+        subscriptionType: presetCompany?.subscriptionType || 'trial',
         password: '',
         generatePassword: true,
       });
       setGeneratedPassword(null);
     }
     setError(null);
-  }, [isOpen, isEdit, user]);
+  }, [isOpen, isEdit, presetCompany, user]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -103,7 +113,6 @@ export default function UserEditModal({
           body: JSON.stringify({
             displayName: formData.displayName,
             companyName: formData.companyName,
-            role: formData.role,
             status: formData.status,
             department: formData.department,
             position: formData.position,
@@ -135,8 +144,8 @@ export default function UserEditModal({
             email: formData.email,
             password: formData.generatePassword ? undefined : formData.password,
             displayName: formData.displayName,
+            companyId: formData.companyId,
             companyName: formData.companyName,
-            role: formData.role,
             department: formData.department,
             position: formData.position,
             subscriptionType: formData.subscriptionType,
@@ -157,11 +166,7 @@ export default function UserEditModal({
         // パスワードが自動生成された場合は表示
         if (result.password) {
           setGeneratedPassword(result.password);
-          // パスワードを表示した後、少し待ってから閉じる
-          setTimeout(() => {
-            onSave();
-            onClose();
-          }, 2000);
+          onSave();
         } else {
           onSave();
           onClose();
@@ -176,6 +181,10 @@ export default function UserEditModal({
   };
 
   if (!isOpen) return null;
+
+  const seatSummary = presetCompany && typeof presetCompany.seatLimit === 'number'
+    ? `${presetCompany.seatsUsed || 0} / ${presetCompany.seatLimit}`
+    : null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -206,6 +215,16 @@ export default function UserEditModal({
               <p className="text-xs font-medium text-blue-900 mb-1">生成されたパスワード:</p>
               <p className="text-sm font-mono text-blue-800 break-all">{generatedPassword}</p>
               <p className="text-xs text-blue-600 mt-1">このパスワードをユーザーに共有してください</p>
+            </div>
+          )}
+
+          {!isEdit && presetCompany && (
+            <div className="mb-4 border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs uppercase tracking-[0.14em] text-slate-500">追加先企業</div>
+              <div className="mt-1 text-sm font-medium text-slate-900">{presetCompany.companyName}</div>
+              {seatSummary && (
+                <div className="mt-2 text-xs text-slate-500">Seats: {seatSummary}</div>
+              )}
             </div>
           )}
 
@@ -291,27 +310,10 @@ export default function UserEditModal({
                   required
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  disabled={!isEdit && !!presetCompany}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm disabled:bg-gray-50 disabled:text-gray-500"
                   placeholder="株式会社サンプル"
                 />
-              </div>
-
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  ロール <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  required
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'manager' | 'user' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
-                >
-                  <option value="user">ユーザー</option>
-                  <option value="manager">マネージャー</option>
-                  <option value="admin">管理者</option>
-                </select>
               </div>
 
               <div>
@@ -372,7 +374,8 @@ export default function UserEditModal({
                   required
                   value={formData.subscriptionType}
                   onChange={(e) => setFormData({ ...formData, subscriptionType: e.target.value as 'trial' | 'contract' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                  disabled={!isEdit && !!presetCompany}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white disabled:bg-gray-50 disabled:text-gray-500"
                 >
                   <option value="trial">お試し1ヶ月</option>
                   <option value="contract">本契約1年</option>
@@ -389,7 +392,7 @@ export default function UserEditModal({
             disabled={loading}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            キャンセル
+            {generatedPassword ? '閉じる' : 'キャンセル'}
           </button>
           <button
             onClick={(e) => {
@@ -399,14 +402,13 @@ export default function UserEditModal({
                 form.requestSubmit();
               }
             }}
-            disabled={loading}
+            disabled={loading || !!generatedPassword}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? '保存中...' : '保存'}
+            {loading ? '保存中...' : generatedPassword ? '保存済み' : '保存'}
           </button>
         </div>
       </div>
     </div>
   );
 }
-

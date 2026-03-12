@@ -2,6 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 
+async function findCompany(companyId?: string | null, companyName?: string | null) {
+  if (companyId) {
+    const companyDoc = await adminDb.collection('companies').doc(companyId).get();
+    if (companyDoc.exists) {
+      return { id: companyDoc.id, ...companyDoc.data() };
+    }
+  }
+
+  if (companyName) {
+    const snapshot = await adminDb
+      .collection('companies')
+      .where('name', '==', companyName)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const companyDoc = snapshot.docs[0];
+      return { id: companyDoc.id, ...companyDoc.data() };
+    }
+  }
+
+  return null;
+}
+
 /**
  * PUT: ユーザー情報を更新
  */
@@ -44,12 +68,11 @@ export async function PUT(
 
     // リクエストボディを取得
     const body = await request.json();
-    const { role, status, department, position, subscriptionType, displayName, companyName } = body;
+    const { status, department, position, subscriptionType, displayName, companyName } = body;
 
     // 更新データを構築
     const updateData: any = {};
 
-    if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
     if (department !== undefined) updateData.department = department;
     if (position !== undefined) updateData.position = position;
@@ -205,11 +228,36 @@ export async function DELETE(
       );
     }
 
+    const userData = userDoc.data();
+    const company = await findCompany(
+      (userData?.companyId as string | undefined) || null,
+      (userData?.companyName as string | undefined) || null
+    );
+
     // Firebase Authからユーザーを削除
     await adminAuth.deleteUser(userId);
 
-    // Firestoreからユーザードキュメントを削除
-    await userDocRef.delete();
+    if (company) {
+      await adminDb.runTransaction(async (transaction) => {
+        const companyRef = adminDb.collection('companies').doc(company.id);
+        const latestCompanyDoc = await transaction.get(companyRef);
+        const latestSeatsUsed = latestCompanyDoc.exists
+          ? Math.max(0, (latestCompanyDoc.data()?.seatsUsed as number | undefined) || 0)
+          : 0;
+
+        transaction.delete(userDocRef);
+
+        if (latestCompanyDoc.exists) {
+          transaction.update(companyRef, {
+            seatsUsed: Math.max(0, latestSeatsUsed - 1),
+            updatedAt: Timestamp.now(),
+          });
+        }
+      });
+    } else {
+      // Firestoreからユーザードキュメントを削除
+      await userDocRef.delete();
+    }
 
     return NextResponse.json({
       success: true,
@@ -223,5 +271,3 @@ export async function DELETE(
     );
   }
 }
-
-

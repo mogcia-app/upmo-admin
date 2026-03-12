@@ -8,20 +8,39 @@ interface User {
   uid: string;
   email: string;
   displayName?: string;
+  companyId?: string | null;
   companyName?: string;
   subscriptionType?: 'trial' | 'contract';
-  role: string;
   status?: string;
   department?: string;
   position?: string;
   createdAt?: any;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  ownerUid?: string;
+  seatLimit?: number;
+  seatsUsed?: number;
+}
+
 // 会社単位でグループ化されたユーザー
 interface CompanyGroup {
+  companyId?: string | null;
   companyName: string;
   users: User[];
   subscriptionType?: 'trial' | 'contract';
+  seatLimit?: number;
+  seatsUsed?: number;
+}
+
+interface AddCompanyContext {
+  companyId?: string | null;
+  companyName: string;
+  subscriptionType?: 'trial' | 'contract';
+  seatLimit?: number;
+  seatsUsed?: number;
 }
 
 export default function UserListComponent() {
@@ -31,6 +50,7 @@ export default function UserListComponent() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addCompanyContext, setAddCompanyContext] = useState<AddCompanyContext | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -64,27 +84,49 @@ export default function UserListComponent() {
       }
 
       const allUsers: User[] = usersResult.users || [];
+      const companies: Company[] = usersResult.companies || [];
+      const companiesById = new Map(companies.map((company) => [company.id, company]));
+      const companiesByName = new Map(companies.map((company) => [company.name, company]));
 
       // 会社名でグループ化
-      const companyMap = new Map<string, User[]>();
+      const companyMap = new Map<string, CompanyGroup>();
       allUsers.forEach((user) => {
-        const companyName = user.companyName || '（会社名未設定）';
-        if (!companyMap.has(companyName)) {
-          companyMap.set(companyName, []);
+        const company =
+          (user.companyId && companiesById.get(user.companyId)) ||
+          (user.companyName && companiesByName.get(user.companyName)) ||
+          null;
+        const resolvedCompanyId = user.companyId || company?.id || null;
+        const resolvedCompanyName = company?.name || user.companyName || '（会社名未設定）';
+        const groupKey = resolvedCompanyId || resolvedCompanyName;
+
+        if (!companyMap.has(groupKey)) {
+          companyMap.set(groupKey, {
+            companyId: resolvedCompanyId,
+            companyName: resolvedCompanyName,
+            users: [],
+            subscriptionType: user.subscriptionType,
+            seatLimit: company?.seatLimit,
+            seatsUsed: company?.seatsUsed,
+          });
         }
-        companyMap.get(companyName)!.push(user);
+
+        const group = companyMap.get(groupKey)!;
+        group.users.push({
+          ...user,
+          companyId: resolvedCompanyId,
+          companyName: resolvedCompanyName,
+        });
+        group.subscriptionType = group.subscriptionType || user.subscriptionType;
+        if (company?.seatLimit !== undefined) {
+          group.seatLimit = company.seatLimit;
+        }
+        if (company?.seatsUsed !== undefined) {
+          group.seatsUsed = company.seatsUsed;
+        }
       });
 
       // 会社グループに変換
-      const groups: CompanyGroup[] = Array.from(companyMap.entries()).map(([companyName, users]) => {
-        // 最初のユーザーのsubscriptionTypeを代表として使用
-        const subscriptionType = users[0]?.subscriptionType;
-        return {
-          companyName,
-          users,
-          subscriptionType,
-        };
-      });
+      const groups: CompanyGroup[] = Array.from(companyMap.values());
 
       // 会社名でソート
       groups.sort((a, b) => a.companyName.localeCompare(b.companyName));
@@ -115,6 +157,19 @@ export default function UserListComponent() {
 
   const handleAddUser = () => {
     setEditUser(null);
+    setAddCompanyContext(null);
+    setIsAddModalOpen(true);
+  };
+
+  const handleAddUserToCompany = (group: CompanyGroup) => {
+    setEditUser(null);
+    setAddCompanyContext({
+      companyId: group.companyId,
+      companyName: group.companyName,
+      subscriptionType: group.subscriptionType,
+      seatLimit: group.seatLimit,
+      seatsUsed: group.seatsUsed,
+    });
     setIsAddModalOpen(true);
   };
 
@@ -165,6 +220,7 @@ export default function UserListComponent() {
 
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);
+    setAddCompanyContext(null);
   };
 
   if (loading) {
@@ -193,33 +249,52 @@ export default function UserListComponent() {
     );
   }
 
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return '管理者';
-      case 'manager':
-        return 'マネージャー';
-      case 'user':
-        return 'ユーザー';
-      default:
-        return role;
+  const getSeatSummary = (group: CompanyGroup) => {
+    if (typeof group.seatLimit !== 'number') {
+      return '席数設定なし';
     }
+
+    const used = typeof group.seatsUsed === 'number' ? group.seatsUsed : group.users.length;
+    return `${used} / ${group.seatLimit}`;
+  };
+
+  const getRemainingSeatsLabel = (group: CompanyGroup) => {
+    if (typeof group.seatLimit !== 'number') {
+      return '残り席数は未設定';
+    }
+
+    const used = typeof group.seatsUsed === 'number' ? group.seatsUsed : group.users.length;
+    const remaining = Math.max(group.seatLimit - used, 0);
+    return remaining === 0 ? '残り 0 席' : `残り ${remaining} 席`;
+  };
+
+  const isSeatFull = (group: CompanyGroup) => {
+    if (typeof group.seatLimit !== 'number') {
+      return false;
+    }
+
+    const used = typeof group.seatsUsed === 'number' ? group.seatsUsed : group.users.length;
+    return used >= group.seatLimit;
   };
 
   return (
     <>
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex items-center justify-between border border-slate-200 bg-slate-50 px-4 py-3">
+        <div>
+          <div className="text-sm font-medium text-slate-900">企業ごとの利用者管理</div>
+          <div className="mt-1 text-xs text-slate-500">既存企業には会社カードから追加してください。</div>
+        </div>
         <button
           onClick={handleAddUser}
           className="border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
         >
-          + ユーザー追加
+          + 単体追加
         </button>
       </div>
 
       <div className="space-y-6">
         {companyGroups.map((group) => (
-          <div key={group.companyName} className="overflow-hidden border border-slate-200 bg-white">
+          <div key={group.companyId || group.companyName} className="overflow-hidden border border-slate-200 bg-white">
             {/* 会社ヘッダー */}
             <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -230,6 +305,9 @@ export default function UserListComponent() {
                   <p className="mt-1 text-sm text-slate-600">
                     {group.users.length}名のユーザー
                   </p>
+                  <p className="mt-2 text-sm font-medium text-slate-800">
+                    {getRemainingSeatsLabel(group)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="min-w-40 border border-slate-200 bg-white px-4 py-3">
@@ -238,6 +316,19 @@ export default function UserListComponent() {
                       {getSubscriptionTypeLabel(group.subscriptionType)}
                     </div>
                   </div>
+                  <div className="min-w-40 border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500">Seats</div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {getSeatSummary(group)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleAddUserToCompany(group)}
+                    disabled={isSeatFull(group)}
+                    className="border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    {isSeatFull(group) ? '席数上限' : 'この企業に追加'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -257,9 +348,6 @@ export default function UserListComponent() {
                           <div className="text-sm font-medium text-slate-900">
                             {user.displayName || '（表示名未設定）'}
                           </div>
-                          <span className="border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-800">
-                            {getRoleLabel(user.role)}
-                          </span>
                           {user.status && (
                             <span className={`border px-2 py-0.5 text-xs ${
                               user.status === 'active' 
@@ -319,6 +407,7 @@ export default function UserListComponent() {
           user={null}
           isOpen={isAddModalOpen}
           isEdit={false}
+          presetCompany={addCompanyContext}
           onClose={handleCloseAddModal}
           onSave={handleSaveSuccess}
         />
