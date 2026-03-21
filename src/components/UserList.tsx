@@ -14,7 +14,7 @@ interface User {
   status?: string;
   department?: string;
   position?: string;
-  createdAt?: any;
+  createdAt?: unknown;
 }
 
 interface Company {
@@ -207,9 +207,9 @@ export default function UserListComponent() {
       }
 
       fetchUsers(); // 一覧を再取得
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting user:', err);
-      alert(err.message || 'ユーザー削除に失敗しました');
+      alert(err instanceof Error ? err.message : 'ユーザー削除に失敗しました');
     }
   };
 

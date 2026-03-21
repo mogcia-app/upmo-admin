@@ -22,11 +22,13 @@ export default function UserRegistrationWithSidebarComponent() {
   // ユーザー数の変更時にユーザー配列を更新
   useEffect(() => {
     const count = userCount === 'custom' ? customUserCount : userCount;
-    const newUsers: UserInput[] = [];
-    for (let i = 0; i < count; i++) {
-      newUsers.push(users[i] || { displayName: '', email: '' });
-    }
-    setUsers(newUsers);
+    setUsers((currentUsers) => {
+      const nextUsers: UserInput[] = [];
+      for (let i = 0; i < count; i++) {
+        nextUsers.push(currentUsers[i] || { displayName: '', email: '' });
+      }
+      return nextUsers;
+    });
   }, [userCount, customUserCount]);
 
   const handleUserChange = (index: number, field: keyof UserInput, value: string) => {
@@ -114,15 +116,9 @@ export default function UserRegistrationWithSidebarComponent() {
         setError(`一部のユーザー登録に失敗しました:\n${errorMessages}`);
       }
       
-    } catch (err: any) {
+    } catch (err) {
       console.error('Registration error:', err);
-      let errorMessage = '登録に失敗しました';
-      
-      if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      setError(err instanceof Error ? err.message : '登録に失敗しました');
     } finally {
       setLoading(false);
     }

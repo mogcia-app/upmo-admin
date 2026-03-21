@@ -6,6 +6,31 @@ import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { isEmailAllowed } from '@/lib/allowed-emails';
 
+function getFirebaseErrorMessage(error: unknown) {
+  if (typeof error !== 'object' || error === null) {
+    return 'ログインに失敗しました';
+  }
+
+  const candidate = error as { code?: string; message?: string };
+  if (candidate.code === 'auth/invalid-email') {
+    return 'メールアドレスの形式が正しくありません';
+  }
+  if (candidate.code === 'auth/user-not-found') {
+    return 'このメールアドレスのユーザーが見つかりません';
+  }
+  if (candidate.code === 'auth/wrong-password') {
+    return 'パスワードが正しくありません';
+  }
+  if (candidate.code === 'auth/too-many-requests') {
+    return 'ログイン試行回数が多すぎます。しばらくしてから再度お試しください';
+  }
+  if (candidate.message) {
+    return candidate.message;
+  }
+
+  return 'ログインに失敗しました';
+}
+
 export default function LoginComponent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,23 +53,9 @@ export default function LoginComponent() {
 
       await signInWithEmailAndPassword(auth, normalizedEmail, password);
       router.push('/admin/users');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Login error:', err);
-      let errorMessage = 'ログインに失敗しました';
-      
-      if (err.code === 'auth/invalid-email') {
-        errorMessage = 'メールアドレスの形式が正しくありません';
-      } else if (err.code === 'auth/user-not-found') {
-        errorMessage = 'このメールアドレスのユーザーが見つかりません';
-      } else if (err.code === 'auth/wrong-password') {
-        errorMessage = 'パスワードが正しくありません';
-      } else if (err.code === 'auth/too-many-requests') {
-        errorMessage = 'ログイン試行回数が多すぎます。しばらくしてから再度お試しください';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      setError(getFirebaseErrorMessage(err));
     } finally {
       setLoading(false);
     }

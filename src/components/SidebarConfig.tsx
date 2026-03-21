@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 
 export default function SidebarConfigComponent() {

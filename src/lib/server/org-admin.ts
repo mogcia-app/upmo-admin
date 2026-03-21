@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { ADMIN_FEATURE_KEYS, type AdminFeatureKey, type FeatureSetting } from '@/types/features';
-import { type DocumentAccessRole } from '@/types/document-access';
+import { type OrganizationRole } from '@/types/organization-role';
 
 interface OrganizationContext {
   orgId: string;
@@ -12,7 +10,7 @@ interface OrganizationContext {
 
 export interface AuthenticatedOrganizationRequest {
   uid: string;
-  role: DocumentAccessRole;
+  role: OrganizationRole;
   organization: OrganizationContext;
   userData: Record<string, unknown> | null;
 }
@@ -20,47 +18,6 @@ export interface AuthenticatedOrganizationRequest {
 export interface PeriodRange {
   from: Date;
   to: Date;
-}
-
-function isFeatureKey(value: string): value is AdminFeatureKey {
-  return ADMIN_FEATURE_KEYS.includes(value as AdminFeatureKey);
-}
-
-export function parseFeatureSettings(raw: unknown): FeatureSetting[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  const deduped = new Map<AdminFeatureKey, FeatureSetting>();
-
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') {
-      continue;
-    }
-
-    const featureKey = (item as { featureKey?: string }).featureKey;
-    const enabled = (item as { enabled?: boolean }).enabled;
-
-    if (typeof featureKey !== 'string' || !isFeatureKey(featureKey) || typeof enabled !== 'boolean') {
-      continue;
-    }
-
-    deduped.set(featureKey, { featureKey, enabled });
-  }
-
-  return Array.from(deduped.values());
-}
-
-export function normalizeAllFeatureSettings(raw: unknown): FeatureSetting[] {
-  const existing = new Map(parseFeatureSettings(raw).map((item) => [item.featureKey, item.enabled]));
-  return ADMIN_FEATURE_KEYS.map((featureKey) => ({
-    featureKey,
-    enabled: existing.get(featureKey) ?? false,
-  }));
-}
-
-export function getEnabledFeatureMap(raw: unknown): Map<AdminFeatureKey, boolean> {
-  return new Map(normalizeAllFeatureSettings(raw).map((item) => [item.featureKey, item.enabled]));
 }
 
 export async function verifyOrganizationAdminAccess(
@@ -93,7 +50,7 @@ export async function verifyOrganizationAdminAccess(
       : null;
     const userData = userDoc.exists ? (userDoc.data() as Record<string, unknown>) : null;
 
-    let resolvedRole: DocumentAccessRole | null = null;
+    let resolvedRole: OrganizationRole | null = null;
 
     if (organizationData?.ownerUid === uid) {
       resolvedRole = 'owner';
@@ -102,7 +59,7 @@ export async function verifyOrganizationAdminAccess(
       typeof organizationMemberData.role === 'string' &&
       ['owner', 'admin', 'member'].includes(organizationMemberData.role)
     ) {
-      resolvedRole = organizationMemberData.role as DocumentAccessRole;
+      resolvedRole = organizationMemberData.role as OrganizationRole;
     } else if (Array.isArray(organizationData?.adminUids) && organizationData.adminUids.includes(uid)) {
       resolvedRole = 'admin';
     }
@@ -125,29 +82,6 @@ export async function verifyOrganizationAdminAccess(
     console.error('Organization access verification error:', error);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-}
-
-export function ensureFeatureEnabled(
-  organizationData: Record<string, unknown> | null,
-  featureKey: AdminFeatureKey,
-) {
-  const features = getEnabledFeatureMap(organizationData?.features);
-  return features.get(featureKey) === true;
-}
-
-export function requireOrganizationFeature(
-  auth: Pick<AuthenticatedOrganizationRequest, 'organization'>,
-  featureKey: AdminFeatureKey,
-) {
-  if (!ensureFeatureEnabled(auth.organization.organizationData, featureKey)) {
-    return NextResponse.json({ error: 'Feature not enabled' }, { status: 403 });
-  }
-
-  if (!ensureFeatureEnabled(auth.organization.organizationMemberData, featureKey)) {
-    return NextResponse.json({ error: 'Feature not enabled' }, { status: 403 });
-  }
-
-  return null;
 }
 
 export function parseIsoDate(value: string | null): Date | null {
@@ -198,50 +132,4 @@ export function parseLimit(value: string | null, defaultValue: number, maxValue:
   }
 
   return parsed;
-}
-
-export async function resolveUserOrganizationId(uid: string): Promise<string | null> {
-  const userDoc = await adminDb.collection('users').doc(uid).get();
-  if (!userDoc.exists) {
-    return null;
-  }
-
-  const userData = userDoc.data() as Record<string, unknown>;
-  if (typeof userData.companyId === 'string' && userData.companyId.length > 0) {
-    return userData.companyId;
-  }
-  if (typeof userData.orgId === 'string' && userData.orgId.length > 0) {
-    return userData.orgId;
-  }
-
-  const ownedOrgSnapshot = await adminDb
-    .collection('organizations')
-    .where('ownerUid', '==', uid)
-    .limit(1)
-    .get();
-
-  if (!ownedOrgSnapshot.empty) {
-    return ownedOrgSnapshot.docs[0].id;
-  }
-
-  return null;
-}
-
-export function toIsoString(value: unknown) {
-  if (value instanceof Timestamp) {
-    return value.toDate().toISOString();
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (typeof value === 'string') {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-
-  return null;
 }

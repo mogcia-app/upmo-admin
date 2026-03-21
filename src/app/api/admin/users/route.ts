@@ -13,6 +13,56 @@ interface CompanyRecord {
   updatedAt?: Timestamp;
 }
 
+interface RequestError {
+  code?: string;
+  message?: string;
+}
+
+interface SingleUserCreationBody {
+  email?: string;
+  password?: string;
+  displayName?: string;
+  companyName?: string;
+  companyId?: string | null;
+  subscriptionType?: string | null;
+  department?: string;
+  position?: string;
+  generatePassword?: boolean;
+}
+
+interface BulkUserInput {
+  email?: string;
+  displayName?: string;
+}
+
+interface BulkUserCreationBody {
+  companyName?: string;
+  companyId?: string | null;
+  users?: BulkUserInput[];
+  subscriptionType?: string | null;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as RequestError;
+    if (candidate.code === 'auth/email-already-exists') {
+      return 'このメールアドレスは既に使用されています';
+    }
+    if (candidate.code === 'auth/invalid-email') {
+      return 'メールアドレスの形式が正しくありません';
+    }
+    if (candidate.message) {
+      return candidate.message;
+    }
+  }
+
+  return fallback;
+}
+
 /**
  * ランダムな仮パスワードを生成
  */
@@ -145,10 +195,10 @@ export async function GET(request: NextRequest) {
       users,
       companies,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch users' },
+      { success: false, error: getErrorMessage(error, 'Failed to fetch users') },
       { status: 500 }
     );
   }
@@ -180,20 +230,11 @@ export async function POST(request: NextRequest) {
       // 単一ユーザー登録処理（後方互換性のため維持）
       return await handleSingleUserCreation(body);
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating user:', error);
-    
-    let errorMessage = 'ユーザー作成に失敗しました';
-    if (error.code === 'auth/email-already-exists') {
-      errorMessage = 'このメールアドレスは既に使用されています';
-    } else if (error.code === 'auth/invalid-email') {
-      errorMessage = 'メールアドレスの形式が正しくありません';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
 
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: getErrorMessage(error, 'ユーザー作成に失敗しました') },
       { status: 500 }
     );
   }
@@ -202,7 +243,7 @@ export async function POST(request: NextRequest) {
 /**
  * 単一ユーザー登録処理
  */
-async function handleSingleUserCreation(body: any) {
+async function handleSingleUserCreation(body: SingleUserCreationBody) {
   const { 
     email, 
     password, 
@@ -224,7 +265,7 @@ async function handleSingleUserCreation(body: any) {
   }
 
   // パスワードの処理: 自動生成が指定されている場合、またはパスワードが提供されていない場合
-  let finalPassword = password;
+  let finalPassword = password ?? '';
   if (generatePassword || !password) {
     finalPassword = generateRandomPassword();
   }
@@ -295,7 +336,7 @@ async function handleSingleUserCreation(body: any) {
 /**
  * 一括ユーザー登録処理
  */
-async function handleBulkUserCreation(body: any) {
+async function handleBulkUserCreation(body: BulkUserCreationBody) {
   const { companyName, companyId, users, subscriptionType } = body;
 
   if (!companyName || !users || !Array.isArray(users) || users.length === 0) {
@@ -374,17 +415,9 @@ async function handleBulkUserCreation(body: any) {
         password: finalPassword,
         success: true,
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error creating user ${email}:`, error);
-      let errorMessage = 'ユーザー作成に失敗しました';
-      if (error.code === 'auth/email-already-exists') {
-        errorMessage = 'このメールアドレスは既に使用されています';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'メールアドレスの形式が正しくありません';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      errors.push({ email, error: errorMessage });
+      errors.push({ email: email || '(不明)', error: getErrorMessage(error, 'ユーザー作成に失敗しました') });
     }
   }
 

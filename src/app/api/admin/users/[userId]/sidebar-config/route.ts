@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminAuth } from '@/lib/firebase-admin';
 
 const UPMO_DEMO_API_BASE = process.env.NEXT_PUBLIC_UPMO_DEMO_API_BASE || 'https://upmo-demo.vercel.app';
 
@@ -23,7 +23,7 @@ export async function GET(
 
     try {
       await adminAuth.verifyIdToken(token);
-    } catch (authError) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 401 }
@@ -82,7 +82,7 @@ export async function POST(
 
     try {
       await adminAuth.verifyIdToken(token);
-    } catch (authError) {
+    } catch {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
         { status: 401 }
@@ -126,4 +126,3 @@ export async function POST(
     );
   }
 }
-

@@ -3,6 +3,14 @@
 import { useState, FormEvent } from 'react';
 import { getAuthToken } from '@/lib/auth';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 export default function UserRegistrationComponent() {
   const [formData, setFormData] = useState({
     email: '',
@@ -54,15 +62,9 @@ export default function UserRegistrationComponent() {
         displayName: '',
         companyName: '',
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Registration error:', err);
-      let errorMessage = 'ユーザー登録に失敗しました';
-      
-      if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      setError(getErrorMessage(err, 'ユーザー登録に失敗しました'));
     } finally {
       setLoading(false);
     }

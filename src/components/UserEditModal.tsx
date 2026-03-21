@@ -23,6 +23,14 @@ interface PresetCompany {
   seatsUsed?: number;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 interface UserEditModalProps {
   user: User | null;
   isOpen: boolean;
@@ -172,9 +180,9 @@ export default function UserEditModal({
           onClose();
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving user:', err);
-      setError(err.message || '保存に失敗しました');
+      setError(getErrorMessage(err, '保存に失敗しました'));
     } finally {
       setLoading(false);
     }

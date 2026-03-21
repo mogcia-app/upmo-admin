@@ -2,6 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 
+interface RequestError {
+  message?: string;
+}
+
+interface UserUpdateBody {
+  status?: string;
+  department?: string;
+  position?: string;
+  subscriptionType?: string | null;
+  displayName?: string;
+  companyName?: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as RequestError;
+    if (candidate.message) {
+      return candidate.message;
+    }
+  }
+
+  return fallback;
+}
+
 async function findCompany(companyId?: string | null, companyName?: string | null) {
   if (companyId) {
     const companyDoc = await adminDb.collection('companies').doc(companyId).get();
@@ -67,11 +95,11 @@ export async function PUT(
     }
 
     // リクエストボディを取得
-    const body = await request.json();
+    const body = (await request.json()) as UserUpdateBody;
     const { status, department, position, subscriptionType, displayName, companyName } = body;
 
     // 更新データを構築
-    const updateData: any = {};
+    const updateData: Record<string, string | null | Timestamp> = {};
 
     if (status !== undefined) updateData.status = status;
     if (department !== undefined) updateData.department = department;
@@ -101,10 +129,10 @@ export async function PUT(
       success: true,
       message: 'User updated successfully',
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update user' },
+      { success: false, error: getErrorMessage(error, 'Failed to update user') },
       { status: 500 }
     );
   }
@@ -168,10 +196,10 @@ export async function GET(
         ...userDoc.data(),
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch user' },
+      { success: false, error: getErrorMessage(error, 'Failed to fetch user') },
       { status: 500 }
     );
   }
@@ -263,10 +291,10 @@ export async function DELETE(
       success: true,
       message: 'User deleted successfully',
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to delete user' },
+      { success: false, error: getErrorMessage(error, 'Failed to delete user') },
       { status: 500 }
     );
   }

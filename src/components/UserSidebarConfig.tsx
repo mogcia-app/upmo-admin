@@ -1,27 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 import Link from 'next/link';
 
+interface BasicUserInfo {
+  uid: string;
+  email?: string;
+  displayName?: string;
+}
+
 export default function UserSidebarConfigComponent() {
   const params = useParams();
-  const router = useRouter();
   const userId = params.userId as string;
   const [config, setConfig] = useState<SidebarConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userInfo, setUserInfo] = useState<any>(null);
+  const [userInfo, setUserInfo] = useState<BasicUserInfo | null>(null);
 
-  useEffect(() => {
-    fetchUserInfo();
-    fetchConfig();
-  }, [userId]);
-
-  const fetchUserInfo = async () => {
+  const fetchUserInfo = useCallback(async () => {
     try {
       const token = await getAuthToken();
       if (!token) return;
@@ -31,8 +31,8 @@ export default function UserSidebarConfigComponent() {
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const user = result.users?.find((u: any) => u.uid === userId);
+        const result = (await response.json()) as { users?: BasicUserInfo[] };
+        const user = result.users?.find((u) => u.uid === userId);
         if (user) {
           setUserInfo(user);
         }
@@ -40,9 +40,9 @@ export default function UserSidebarConfigComponent() {
     } catch (err) {
       console.error('Error fetching user info:', err);
     }
-  };
+  }, [userId]);
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -75,7 +75,12 @@ export default function UserSidebarConfigComponent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    void fetchUserInfo();
+    void fetchConfig();
+  }, [fetchConfig, fetchUserInfo]);
 
   const handleToggle = async (itemId: string) => {
     if (!config) return;
@@ -124,7 +129,7 @@ export default function UserSidebarConfigComponent() {
     } catch (err) {
       console.error('Error updating config:', err);
       setError(err instanceof Error ? err.message : '設定の更新に失敗しました');
-      fetchConfig();
+      void fetchConfig();
     } finally {
       setSaving(false);
     }
@@ -240,5 +245,4 @@ export default function UserSidebarConfigComponent() {
     </div>
   );
 }
-
 

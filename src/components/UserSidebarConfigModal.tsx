@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type MenuItem, type SidebarConfig } from '@/types/sidebar';
+import { useCallback, useEffect, useState } from 'react';
+import { getMenuItemsByCategoryOrdered, CATEGORY_NAMES, AVAILABLE_MENU_ITEMS, type SidebarConfig } from '@/types/sidebar';
 import { getAuthToken } from '@/lib/auth';
 
 interface UserSidebarConfigModalProps {
@@ -24,13 +24,7 @@ export default function UserSidebarConfigModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchConfig();
-    }
-  }, [isOpen, userId]);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -78,7 +72,13 @@ export default function UserSidebarConfigModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void fetchConfig();
+    }
+  }, [fetchConfig, isOpen]);
 
   const handleToggle = (itemId: string) => {
     if (!config) return;
@@ -249,5 +249,4 @@ export default function UserSidebarConfigModal({
     </div>
   );
 }
-
 

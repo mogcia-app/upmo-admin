@@ -111,7 +111,7 @@ export function validateUserData(data: Partial<User>): ValidationResult {
 /**
  * ユーザーデータを正規化（既存データのマイグレーション用）
  */
-export function normalizeUserData(data: any): Partial<User> {
+export function normalizeUserData(data: Record<string, unknown>): Partial<User> {
   const normalized: Partial<User> = {
     ...data,
   };
@@ -148,5 +148,4 @@ export function normalizeUserData(data: any): Partial<User> {
 
   return normalized;
 }
-
 

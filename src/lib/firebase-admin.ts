@@ -19,7 +19,7 @@ const getAdminConfig = () => {
     return {
       credential: cert(serviceAccount),
     };
-  } catch (error) {
+  } catch {
     throw new Error(
       "Failed to parse FIREBASE_ADMIN_SDK_KEY. " +
       "Make sure it's a valid JSON string."
@@ -39,7 +39,6 @@ if (getApps().length === 0) {
 export const adminAuth = getAuth(adminApp);
 export const adminDb = getFirestore(adminApp);
 export default adminApp;
-
 
 
 
