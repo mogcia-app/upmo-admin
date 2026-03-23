@@ -1,3 +1,15 @@
+/**
+ * Legacy user and organization membership backfill.
+ *
+ * Usage:
+ * - Dry run: `npm run migrate:user-members`
+ * - Apply changes: `npm run migrate:user-members -- --apply`
+ *
+ * What it does:
+ * - normalizes legacy roles such as `user` -> `member` and `manager` -> `admin`
+ * - backfills `users/{uid}.companyId` from `companyName` when it resolves uniquely
+ * - ensures `organizations/{companyId}/members/{uid}` exists for resolvable users
+ */
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 

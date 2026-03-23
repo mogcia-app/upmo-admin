@@ -20,26 +20,6 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Data Migration
-
-To backfill old user documents and organization membership documents, run:
-
-```bash
-npm run migrate:user-members
-```
-
-This runs in dry-run mode and prints the planned changes. To apply them:
-
-```bash
-npm run migrate:user-members -- --apply
-```
-
-The migration does the following:
-
-- normalizes `users/{uid}.role` from legacy values such as `user` to `member`
-- fills `users/{uid}.companyId` from `companyName` when it can be resolved uniquely
-- ensures `organizations/{companyId}/members/{uid}` exists for each user with a resolved company
-
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
