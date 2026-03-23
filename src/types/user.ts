@@ -1,11 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**
- * ユーザーの役割
- */
-export type UserRole = 'owner' | 'admin' | 'member';
-
-/**
  * ユーザーのステータス
  */
 export type UserStatus = 'active' | 'inactive' | 'suspended';
@@ -19,7 +14,7 @@ export interface User {
   displayName: string;
   companyId?: string | null;
   companyName: string;
-  role: UserRole;
+  role?: string;
   status: UserStatus;
   createdAt: Timestamp;
 
@@ -39,7 +34,6 @@ export interface User {
  * デフォルト値
  */
 export const DEFAULT_USER_VALUES: Partial<User> = {
-  role: 'member',
   status: 'active',
   department: '',
   position: '',
@@ -71,10 +65,6 @@ export function validateUserData(data: Partial<User>): ValidationResult {
 
   if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {
     errors.push('companyNameは必須です');
-  }
-
-  if (!data.role || !['owner', 'admin', 'member'].includes(data.role)) {
-    errors.push('roleは"owner", "admin", "member"のいずれかである必要があります');
   }
 
   if (!data.status || !['active', 'inactive', 'suspended'].includes(data.status)) {
@@ -118,10 +108,6 @@ export function normalizeUserData(data: Record<string, unknown>): Partial<User> 
   };
 
   // デフォルト値の適用
-  if (!normalized.role) {
-    normalized.role = DEFAULT_USER_VALUES.role as UserRole;
-  }
-
   if (!normalized.status) {
     normalized.status = DEFAULT_USER_VALUES.status as UserStatus;
   }

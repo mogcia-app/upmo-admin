@@ -6,7 +6,6 @@
  * - Apply changes: `npm run migrate:user-members -- --apply`
  *
  * What it does:
- * - normalizes legacy roles such as `user` -> `member` and `manager` -> `admin`
  * - backfills `users/{uid}.companyId` from `companyName` when it resolves uniquely
  * - ensures `organizations/{companyId}/members/{uid}` exists for resolvable users
  */
@@ -38,27 +37,11 @@ const args = new Set(process.argv.slice(2));
 const shouldApply = args.has('--apply');
 const shouldVerbose = args.has('--verbose');
 
-function normalizeRole(role) {
-  if (role === 'owner' || role === 'admin' || role === 'member') {
-    return role;
-  }
-
-  if (role === 'user') {
-    return 'member';
-  }
-
-  if (role === 'manager') {
-    return 'admin';
-  }
-
-  return 'member';
-}
-
 function toTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function buildMemberPayload({ uid, userData, companyId, role }) {
+function buildMemberPayload({ uid, userData, companyId }) {
   const now = Timestamp.now();
 
   return {
@@ -66,7 +49,6 @@ function buildMemberPayload({ uid, userData, companyId, role }) {
     email: userData.email ?? null,
     displayName: userData.displayName ?? userData.email ?? uid,
     companyId,
-    role,
     status: userData.status ?? 'active',
     createdAt: userData.createdAt instanceof Timestamp ? userData.createdAt : now,
     updatedAt: now,
@@ -126,7 +108,6 @@ async function main() {
   const warnings = [];
   const summary = {
     scannedUsers: usersSnapshot.size,
-    usersRoleUpdated: 0,
     usersCompanyIdUpdated: 0,
     membersEnsured: 0,
     unresolvedCompanyUsers: 0,
@@ -134,8 +115,6 @@ async function main() {
 
   for (const userDoc of usersSnapshot.docs) {
     const userData = userDoc.data();
-    const rawRole = toTrimmedString(userData.role);
-    const normalizedRole = normalizeRole(rawRole);
     const rawCompanyId = toTrimmedString(userData.companyId);
     const companyName = toTrimmedString(userData.companyName);
 
@@ -162,11 +141,6 @@ async function main() {
 
     const userUpdates = {};
 
-    if (rawRole !== normalizedRole) {
-      userUpdates.role = normalizedRole;
-      summary.usersRoleUpdated += 1;
-    }
-
     if (resolvedCompanyId && rawCompanyId !== resolvedCompanyId) {
       userUpdates.companyId = resolvedCompanyId;
       summary.usersCompanyIdUpdated += 1;
@@ -189,7 +163,6 @@ async function main() {
       uid: userDoc.id,
       userData,
       companyId: resolvedCompanyId,
-      role: normalizedRole,
     });
 
     const memberRef = db

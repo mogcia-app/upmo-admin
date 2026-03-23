@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { type OrganizationRole } from '@/types/organization-role';
 
 interface OrganizationContext {
   orgId: string;
@@ -10,7 +9,6 @@ interface OrganizationContext {
 
 export interface AuthenticatedOrganizationRequest {
   uid: string;
-  role: OrganizationRole;
   organization: OrganizationContext;
   userData: Record<string, unknown> | null;
 }
@@ -49,28 +47,22 @@ export async function verifyOrganizationAdminAccess(
       ? (organizationMemberDoc.data() as Record<string, unknown>)
       : null;
     const userData = userDoc.exists ? (userDoc.data() as Record<string, unknown>) : null;
+    const userCompanyId = typeof userData?.companyId === 'string' ? userData.companyId : null;
+    const memberCompanyId = typeof organizationMemberData?.companyId === 'string'
+      ? organizationMemberData.companyId
+      : null;
+    const hasOrganizationMembership = organizationMemberDoc.exists;
+    const belongsToOrganization =
+      userCompanyId === orgId ||
+      memberCompanyId === orgId ||
+      hasOrganizationMembership;
 
-    let resolvedRole: OrganizationRole | null = null;
-
-    if (organizationData?.ownerUid === uid) {
-      resolvedRole = 'owner';
-    } else if (
-      organizationMemberData &&
-      typeof organizationMemberData.role === 'string' &&
-      ['owner', 'admin', 'member'].includes(organizationMemberData.role)
-    ) {
-      resolvedRole = organizationMemberData.role as OrganizationRole;
-    } else if (Array.isArray(organizationData?.adminUids) && organizationData.adminUids.includes(uid)) {
-      resolvedRole = 'admin';
-    }
-
-    if (!resolvedRole || (resolvedRole !== 'owner' && resolvedRole !== 'admin')) {
+    if (!organizationDoc.exists || !belongsToOrganization) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     return {
       uid,
-      role: resolvedRole,
       organization: {
         orgId,
         organizationData,

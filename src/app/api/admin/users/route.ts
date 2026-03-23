@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { validateUserData } from '@/types/user';
 
 interface CompanyRecord {
@@ -16,6 +16,12 @@ interface CompanyRecord {
 interface RequestError {
   code?: string;
   message?: string;
+}
+
+interface AuthenticatedUserContext {
+  token: string;
+  uid: string;
+  companyId: string | null;
 }
 
 interface SingleUserCreationBody {
@@ -75,7 +81,7 @@ function generateRandomPassword(length: number = 12): string {
   return password;
 }
 
-async function verifyAuthToken(request: NextRequest): Promise<{ token: string } | NextResponse> {
+async function verifyAuthToken(request: NextRequest): Promise<AuthenticatedUserContext | NextResponse> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return NextResponse.json(
@@ -87,8 +93,31 @@ async function verifyAuthToken(request: NextRequest): Promise<{ token: string } 
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    await adminAuth.verifyIdToken(token);
-    return { token };
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
+
+    if (!userDoc.exists) {
+      return NextResponse.json(
+        { success: false, error: 'User context not found' },
+        { status: 403 }
+      );
+    }
+
+    const userData = userDoc.data() as Record<string, unknown>;
+    const companyId = typeof userData.companyId === 'string' ? userData.companyId : null;
+
+    if (!companyId) {
+      return NextResponse.json(
+        { success: false, error: 'Company context is required' },
+        { status: 403 }
+      );
+    }
+
+    return {
+      token,
+      uid: decodedToken.uid,
+      companyId,
+    };
   } catch (authError) {
     console.error('Auth verification error:', authError);
     return NextResponse.json(
@@ -163,7 +192,6 @@ async function createUserDocumentWithSeatReservation(params: {
       email: userData.email,
       displayName: userData.displayName,
       companyId: company.id,
-      role: userData.role,
       status: userData.status,
       createdAt: userData.createdAt,
       updatedAt: userData.updatedAt,
@@ -187,8 +215,8 @@ export async function GET(request: NextRequest) {
 
     // Firestoreからユーザー一覧を取得
     const [usersSnapshot, companiesSnapshot] = await Promise.all([
-      adminDb.collection('users').get(),
-      adminDb.collection('companies').get(),
+      adminDb.collection('users').where('companyId', '==', authResult.companyId).get(),
+      adminDb.collection('companies').where(FieldPath.documentId(), '==', authResult.companyId).get(),
     ]);
 
     const users = usersSnapshot.docs.map((doc) => ({
@@ -310,7 +338,6 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
     displayName: displayName || email.split('@')[0],
     companyId: company.id,
     companyName: normalizedCompanyName,
-    role: 'member' as const,
     status: 'active' as const,
     department: department || '',
     position: position || '',
@@ -399,7 +426,6 @@ async function handleBulkUserCreation(body: BulkUserCreationBody) {
         displayName: displayName || email.split('@')[0],
         companyId: company.id,
         companyName: normalizedCompanyName,
-        role: 'member' as const,
         status: 'active' as const,
         department: '',
         position: '',
