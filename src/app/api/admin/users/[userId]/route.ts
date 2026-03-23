@@ -268,12 +268,18 @@ export async function DELETE(
     if (company) {
       await adminDb.runTransaction(async (transaction) => {
         const companyRef = adminDb.collection('companies').doc(company.id);
+        const organizationMemberRef = adminDb
+          .collection('organizations')
+          .doc(company.id)
+          .collection('members')
+          .doc(userId);
         const latestCompanyDoc = await transaction.get(companyRef);
         const latestSeatsUsed = latestCompanyDoc.exists
           ? Math.max(0, (latestCompanyDoc.data()?.seatsUsed as number | undefined) || 0)
           : 0;
 
         transaction.delete(userDocRef);
+        transaction.delete(organizationMemberRef);
 
         if (latestCompanyDoc.exists) {
           transaction.update(companyRef, {

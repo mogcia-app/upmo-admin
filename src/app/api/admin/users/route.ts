@@ -131,15 +131,15 @@ async function findCompany(companyId?: string | null, companyName?: string | nul
 async function createUserDocumentWithSeatReservation(params: {
   uid: string;
   userData: Record<string, unknown>;
-  company: CompanyRecord | null;
+  company: CompanyRecord;
 }) {
   const { uid, userData, company } = params;
   const userDocRef = adminDb.collection('users').doc(uid);
-
-  if (!company) {
-    await userDocRef.set(userData);
-    return;
-  }
+  const organizationMemberRef = adminDb
+    .collection('organizations')
+    .doc(company.id)
+    .collection('members')
+    .doc(uid);
 
   await adminDb.runTransaction(async (transaction) => {
     const companyRef = adminDb.collection('companies').doc(company.id);
@@ -158,6 +158,16 @@ async function createUserDocumentWithSeatReservation(params: {
     }
 
     transaction.set(userDocRef, userData);
+    transaction.set(organizationMemberRef, {
+      uid,
+      email: userData.email,
+      displayName: userData.displayName,
+      companyId: company.id,
+      role: userData.role,
+      status: userData.status,
+      createdAt: userData.createdAt,
+      updatedAt: userData.updatedAt,
+    });
     transaction.update(companyRef, {
       seatsUsed: seatsUsed + 1,
       updatedAt: Timestamp.now(),
@@ -278,6 +288,15 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
     );
   }
 
+  const company = await findCompany(companyId, companyName);
+  if (!company) {
+    return NextResponse.json(
+      { success: false, error: '有効な会社を指定してください' },
+      { status: 400 }
+    );
+  }
+  const normalizedCompanyName = company?.name || companyName || '';
+
   // 1. Firebase Authenticationでユーザーを作成
   const userRecord = await adminAuth.createUser({
     email,
@@ -285,16 +304,13 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
     displayName: displayName || undefined,
   });
 
-  const company = await findCompany(companyId, companyName);
-  const normalizedCompanyName = company?.name || companyName || '';
-
   // 2. Firestoreにユーザー情報を保存（統一スキーマに準拠）
   const userData = {
     email,
     displayName: displayName || email.split('@')[0],
-    companyId: company?.id || companyId || null,
+    companyId: company.id,
     companyName: normalizedCompanyName,
-    role: 'user' as const,
+    role: 'member' as const,
     status: 'active' as const,
     department: department || '',
     position: position || '',
@@ -349,6 +365,12 @@ async function handleBulkUserCreation(body: BulkUserCreationBody) {
   const results: Array<{ email: string; uid: string; password: string; success: boolean }> = [];
   const errors: Array<{ email: string; error: string }> = [];
   const company = await findCompany(companyId, companyName);
+  if (!company) {
+    return NextResponse.json(
+      { success: false, error: '有効な会社を指定してください' },
+      { status: 400 }
+    );
+  }
   const normalizedCompanyName = company?.name || companyName;
 
   for (const userInput of users) {
@@ -375,9 +397,9 @@ async function handleBulkUserCreation(body: BulkUserCreationBody) {
       const userData = {
         email,
         displayName: displayName || email.split('@')[0],
-        companyId: company?.id || companyId || null,
+        companyId: company.id,
         companyName: normalizedCompanyName,
-        role: 'user' as const, // デフォルトでuser
+        role: 'member' as const,
         status: 'active' as const,
         department: '',
         position: '',

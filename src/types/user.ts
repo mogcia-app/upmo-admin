@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 /**
  * ユーザーの役割
  */
-export type UserRole = 'admin' | 'manager' | 'user';
+export type UserRole = 'owner' | 'admin' | 'member';
 
 /**
  * ユーザーのステータス
@@ -17,6 +17,7 @@ export interface User {
   // 必須フィールド
   email: string;
   displayName: string;
+  companyId?: string | null;
   companyName: string;
   role: UserRole;
   status: UserStatus;
@@ -38,7 +39,7 @@ export interface User {
  * デフォルト値
  */
 export const DEFAULT_USER_VALUES: Partial<User> = {
-  role: 'user',
+  role: 'member',
   status: 'active',
   department: '',
   position: '',
@@ -72,8 +73,8 @@ export function validateUserData(data: Partial<User>): ValidationResult {
     errors.push('companyNameは必須です');
   }
 
-  if (!data.role || !['admin', 'manager', 'user'].includes(data.role)) {
-    errors.push('roleは"admin", "manager", "user"のいずれかである必要があります');
+  if (!data.role || !['owner', 'admin', 'member'].includes(data.role)) {
+    errors.push('roleは"owner", "admin", "member"のいずれかである必要があります');
   }
 
   if (!data.status || !['active', 'inactive', 'suspended'].includes(data.status)) {
@@ -148,4 +149,3 @@ export function normalizeUserData(data: Record<string, unknown>): Partial<User> 
 
   return normalized;
 }
-
