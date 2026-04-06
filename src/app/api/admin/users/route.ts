@@ -23,6 +23,7 @@ interface AuthenticatedUserContext {
   token: string;
   uid: string;
   companyId: string | null;
+  isAllowedAdmin?: boolean;
 }
 
 interface VerifyAuthTokenOptions {
@@ -112,6 +113,7 @@ async function verifyAuthToken(
           token,
           uid: decodedToken.uid,
           companyId: null,
+          isAllowedAdmin: true,
         };
       }
 
@@ -130,6 +132,7 @@ async function verifyAuthToken(
           token,
           uid: decodedToken.uid,
           companyId: null,
+          isAllowedAdmin: true,
         };
       }
 
@@ -143,6 +146,7 @@ async function verifyAuthToken(
       token,
       uid: decodedToken.uid,
       companyId,
+      isAllowedAdmin,
     };
   } catch (authError) {
     console.error('Auth verification error:', authError);
@@ -283,16 +287,23 @@ async function createUserDocumentWithSeatReservation(params: {
  */
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyAuthToken(request);
+    const authResult = await verifyAuthToken(request, { requireCompanyContext: false });
     if (authResult instanceof NextResponse) {
       return authResult;
     }
 
+    const shouldFetchAllCompanies = authResult.isAllowedAdmin && !authResult.companyId;
+
     // Firestoreからユーザー一覧を取得
-    const [usersSnapshot, companiesSnapshot] = await Promise.all([
-      adminDb.collection('users').where('companyId', '==', authResult.companyId).get(),
-      adminDb.collection('companies').where(FieldPath.documentId(), '==', authResult.companyId).get(),
-    ]);
+    const [usersSnapshot, companiesSnapshot] = shouldFetchAllCompanies
+      ? await Promise.all([
+          adminDb.collection('users').get(),
+          adminDb.collection('companies').get(),
+        ])
+      : await Promise.all([
+          adminDb.collection('users').where('companyId', '==', authResult.companyId).get(),
+          adminDb.collection('companies').where(FieldPath.documentId(), '==', authResult.companyId).get(),
+        ]);
 
     const users = usersSnapshot.docs.map((doc) => ({
       uid: doc.id,
