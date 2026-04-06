@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { validateUserData } from '@/types/user';
+import { isEmailAllowed } from '@/lib/allowed-emails';
 
 interface CompanyRecord {
   id: string;
@@ -22,6 +23,10 @@ interface AuthenticatedUserContext {
   token: string;
   uid: string;
   companyId: string | null;
+}
+
+interface VerifyAuthTokenOptions {
+  requireCompanyContext?: boolean;
 }
 
 interface SingleUserCreationBody {
@@ -81,7 +86,11 @@ function generateRandomPassword(length: number = 12): string {
   return password;
 }
 
-async function verifyAuthToken(request: NextRequest): Promise<AuthenticatedUserContext | NextResponse> {
+async function verifyAuthToken(
+  request: NextRequest,
+  options: VerifyAuthTokenOptions = {},
+): Promise<AuthenticatedUserContext | NextResponse> {
+  const { requireCompanyContext = true } = options;
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return NextResponse.json(
@@ -94,9 +103,18 @@ async function verifyAuthToken(request: NextRequest): Promise<AuthenticatedUserC
 
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
+    const isAllowedAdmin = isEmailAllowed(decodedToken.email);
     const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
 
     if (!userDoc.exists) {
+      if (!requireCompanyContext && isAllowedAdmin) {
+        return {
+          token,
+          uid: decodedToken.uid,
+          companyId: null,
+        };
+      }
+
       return NextResponse.json(
         { success: false, error: 'User context not found' },
         { status: 403 }
@@ -107,6 +125,14 @@ async function verifyAuthToken(request: NextRequest): Promise<AuthenticatedUserC
     const companyId = typeof userData.companyId === 'string' ? userData.companyId : null;
 
     if (!companyId) {
+      if (!requireCompanyContext && isAllowedAdmin) {
+        return {
+          token,
+          uid: decodedToken.uid,
+          companyId: null,
+        };
+      }
+
       return NextResponse.json(
         { success: false, error: 'Company context is required' },
         { status: 403 }
@@ -252,7 +278,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuthToken(request);
+    const authResult = await verifyAuthToken(request, { requireCompanyContext: false });
     if (authResult instanceof NextResponse) {
       return authResult;
     }
