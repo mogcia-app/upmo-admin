@@ -8,7 +8,7 @@ interface CompanyRecord {
   id: string;
   name: string;
   ownerUid?: string;
-  seatLimit?: number;
+  seatLimit?: number | null;
   seatsUsed?: number;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -183,6 +183,55 @@ async function findCompany(companyId?: string | null, companyName?: string | nul
   return null;
 }
 
+async function findOrCreateCompany(params: {
+  companyId?: string | null;
+  companyName?: string | null;
+  subscriptionType?: string | null;
+  ownerUid?: string | null;
+}): Promise<CompanyRecord | null> {
+  const normalizedCompanyName = params.companyName?.trim() || null;
+  const existingCompany = await findCompany(params.companyId, normalizedCompanyName);
+
+  if (existingCompany) {
+    return existingCompany;
+  }
+
+  if (!normalizedCompanyName) {
+    return null;
+  }
+
+  const companyRef = adminDb.collection('companies').doc();
+  const now = Timestamp.now();
+  const companyData = {
+    name: normalizedCompanyName,
+    ownerUid: params.ownerUid || undefined,
+    seatLimit: null,
+    seatsUsed: 0,
+    subscriptionType: params.subscriptionType || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const organizationData = {
+    name: normalizedCompanyName,
+    companyId: companyRef.id,
+    ownerUid: params.ownerUid || null,
+    subscriptionType: params.subscriptionType || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await Promise.all([
+    companyRef.set(companyData),
+    adminDb.collection('organizations').doc(companyRef.id).set(organizationData),
+  ]);
+
+  return {
+    id: companyRef.id,
+    ...companyData,
+  };
+}
+
 async function createUserDocumentWithSeatReservation(params: {
   uid: string;
   userData: Record<string, unknown>;
@@ -289,10 +338,10 @@ export async function POST(request: NextRequest) {
     // 一括登録かどうかを判定
     if (body.users && Array.isArray(body.users)) {
       // 一括登録処理
-      return await handleBulkUserCreation(body);
+      return await handleBulkUserCreation(body, authResult.uid);
     } else {
       // 単一ユーザー登録処理（後方互換性のため維持）
-      return await handleSingleUserCreation(body);
+      return await handleSingleUserCreation(body, authResult.uid);
     }
   } catch (error) {
     console.error('Error creating user:', error);
@@ -307,7 +356,7 @@ export async function POST(request: NextRequest) {
 /**
  * 単一ユーザー登録処理
  */
-async function handleSingleUserCreation(body: SingleUserCreationBody) {
+async function handleSingleUserCreation(body: SingleUserCreationBody, actorUid?: string) {
   const { 
     email, 
     password, 
@@ -319,6 +368,7 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
     position,
     generatePassword
   } = body;
+  const normalizedCompanyNameInput = companyName?.trim() || null;
 
   // 基本的なチェック（emailのみ必須、passwordは自動生成の場合は不要）
   if (!email) {
@@ -342,14 +392,19 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
     );
   }
 
-  const company = await findCompany(companyId, companyName);
+  const company = await findOrCreateCompany({
+    companyId,
+    companyName: normalizedCompanyNameInput,
+    subscriptionType,
+    ownerUid: actorUid,
+  });
   if (!company) {
     return NextResponse.json(
       { success: false, error: '有効な会社を指定してください' },
       { status: 400 }
     );
   }
-  const normalizedCompanyName = company?.name || companyName || '';
+  const normalizedCompanyName = company.name || normalizedCompanyNameInput || '';
 
   // 1. Firebase Authenticationでユーザーを作成
   const userRecord = await adminAuth.createUser({
@@ -405,10 +460,11 @@ async function handleSingleUserCreation(body: SingleUserCreationBody) {
 /**
  * 一括ユーザー登録処理
  */
-async function handleBulkUserCreation(body: BulkUserCreationBody) {
+async function handleBulkUserCreation(body: BulkUserCreationBody, actorUid?: string) {
   const { companyName, companyId, users, subscriptionType } = body;
+  const normalizedCompanyNameInput = companyName?.trim() || null;
 
-  if (!companyName || !users || !Array.isArray(users) || users.length === 0) {
+  if (!normalizedCompanyNameInput || !users || !Array.isArray(users) || users.length === 0) {
     return NextResponse.json(
       { success: false, error: '会社名とユーザーリストは必須です' },
       { status: 400 }
@@ -417,14 +473,19 @@ async function handleBulkUserCreation(body: BulkUserCreationBody) {
 
   const results: Array<{ email: string; uid: string; password: string; success: boolean }> = [];
   const errors: Array<{ email: string; error: string }> = [];
-  const company = await findCompany(companyId, companyName);
+  const company = await findOrCreateCompany({
+    companyId,
+    companyName: normalizedCompanyNameInput,
+    subscriptionType,
+    ownerUid: actorUid,
+  });
   if (!company) {
     return NextResponse.json(
       { success: false, error: '有効な会社を指定してください' },
       { status: 400 }
     );
   }
-  const normalizedCompanyName = company?.name || companyName;
+  const normalizedCompanyName = company.name || normalizedCompanyNameInput;
 
   for (const userInput of users) {
     const { email, displayName } = userInput;
